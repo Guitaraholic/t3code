@@ -3,7 +3,7 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { describe, expect, it } from "@effect/vitest";
+import { beforeEach, describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -17,6 +17,7 @@ import {
   checkGrokProviderStatus,
   parseGrokModelsCliOutput,
 } from "./GrokProvider.ts";
+import { resetUsageProbeCacheForTests } from "../providerUsageProbeCache.ts";
 
 const decodeGrokSettings = Schema.decodeSync(GrokSettings);
 const __dirname = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
@@ -287,6 +288,10 @@ describe("buildInitialGrokProviderSnapshot", () => {
 });
 
 it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
+  beforeEach(() => {
+    resetUsageProbeCacheForTests();
+  });
+
   it.effect("reports the binary as missing when the binary path does not resolve", () =>
     Effect.gen(function* () {
       const snapshot = yield* checkGrokProviderStatus(

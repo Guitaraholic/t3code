@@ -40,6 +40,7 @@ import {
 import { sessionModelStateFromInitialize } from "../acp/AcpRuntimeModel.ts";
 import { discoverGrokSkills } from "../Drivers/GrokSkills.ts";
 import { probeGrokUsageLimits } from "../grokTuiUsageProbe.ts";
+import { cachedUsageProbe, makeProviderUsageProbeCacheKey } from "../providerUsageProbeCache.ts";
 
 const GROK_PRESENTATION = {
   displayName: "Grok",
@@ -493,12 +494,18 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
 
   const usageLimits =
     auth.status === "authenticated" && auth.type !== "api_key"
-      ? yield* probeGrokUsageLimits({
-          binaryPath: grokSettings.binaryPath || "grok",
-          cwd: cwd ?? process.cwd(),
-          checkedAt,
-          environment,
-        }).pipe(Effect.map((result) => result.usageLimits))
+      ? yield* cachedUsageProbe({
+          cacheKey: makeProviderUsageProbeCacheKey({
+            driver: "grok",
+            binaryPath: grokSettings.binaryPath || "grok",
+          }),
+          probe: probeGrokUsageLimits({
+            binaryPath: grokSettings.binaryPath || "grok",
+            cwd: cwd ?? process.cwd(),
+            checkedAt,
+            environment,
+          }).pipe(Effect.map((result) => result.usageLimits)),
+        })
       : undefined;
 
   return buildServerProvider({

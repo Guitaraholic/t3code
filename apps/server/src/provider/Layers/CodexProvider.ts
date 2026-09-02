@@ -26,6 +26,11 @@ import type {
 import { PREFERRED_DEFAULT_CODEX_MODELS, ServerSettingsError } from "@t3tools/contracts";
 import { makeUnavailableUsageLimits } from "../providerUsageLimits.ts";
 import { resolveCodexRateLimitSnapshotUsageLimits } from "../codexUsageProbe.ts";
+import {
+  makeProviderUsageProbeCacheKey,
+  readCachedUsageProbe,
+  rememberUsageProbeResult,
+} from "../providerUsageProbeCache.ts";
 
 import { createModelCapabilities } from "@t3tools/shared/model";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
@@ -330,6 +335,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
   readonly cwd: string;
   readonly customModels?: ReadonlyArray<string>;
   readonly environment?: NodeJS.ProcessEnv;
+  readonly skipRateLimitsRead?: boolean;
 }) {
   // `~` is not shell-expanded when env vars are set via `child_process.spawn`,
   // so `CODEX_HOME=~/.codex_work` would reach codex verbatim and trip
@@ -413,12 +419,14 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
   // "no usage". A hung `account/rateLimits/read` must not consume the outer
   // 10s probe budget and discard account/models/skills already fetched.
   // Rethrow interrupts so a cancelled probe cannot finish as success.
-  const rateLimitsResponse = yield* client.request("account/rateLimits/read", undefined).pipe(
-    Effect.timeoutOption(Duration.millis(RATE_LIMITS_PROBE_TIMEOUT_MS)),
-    Effect.catchCause((cause) =>
-      Cause.hasInterrupts(cause) ? Effect.failCause(cause) : Effect.succeed(Option.none()),
-    ),
-  );
+  const rateLimitsResponse = input.skipRateLimitsRead
+    ? Option.none()
+    : yield* client.request("account/rateLimits/read", undefined).pipe(
+        Effect.timeoutOption(Duration.millis(RATE_LIMITS_PROBE_TIMEOUT_MS)),
+        Effect.catchCause((cause) =>
+          Cause.hasInterrupts(cause) ? Effect.failCause(cause) : Effect.succeed(Option.none()),
+        ),
+      );
 
   const rateLimits = Option.getOrUndefined(rateLimitsResponse)?.rateLimits;
   return {
@@ -573,6 +581,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     readonly cwd: string;
     readonly customModels: ReadonlyArray<string>;
     readonly environment?: NodeJS.ProcessEnv;
+    readonly skipRateLimitsRead?: boolean;
   }) => Effect.Effect<
     CodexAppServerProviderSnapshot,
     CodexErrors.CodexAppServerError,
@@ -605,6 +614,15 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     });
   }
 
+  const usageCacheKey = makeProviderUsageProbeCacheKey({
+    driver: "codex",
+    binaryPath: codexSettings.binaryPath,
+    homePath: codexSettings.homePath,
+    ...(codexSettings.launchArgs ? { launchArgs: codexSettings.launchArgs } : {}),
+  });
+  const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
+  const cachedUsage = readCachedUsageProbe(usageCacheKey, nowMs);
+
   const probeResult = yield* probe({
     binaryPath: codexSettings.binaryPath,
     homePath: codexSettings.homePath,
@@ -612,6 +630,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     cwd: process.cwd(),
     customModels: codexSettings.customModels,
     environment: resolvedEnvironment,
+    skipRateLimitsRead: cachedUsage?.skipProbe === true,
   }).pipe(
     Effect.scoped,
     Effect.timeoutOption(Duration.millis(AUTH_PROBE_TIMEOUT_MS)),
@@ -660,15 +679,25 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
   const accountStatus = accountProbeStatus(snapshot.account);
   const usageLimits =
     snapshot.account.account?.type === "apiKey"
-      ? makeUnavailableUsageLimits({
-          source: "codexAppServer",
-          checkedAt,
-          reason: "Usage limits unavailable for API key Codex accounts.",
-        })
-      : resolveCodexRateLimitSnapshotUsageLimits({
-          checkedAt,
-          ...(snapshot.rateLimits ? { snapshot: snapshot.rateLimits } : {}),
-        });
+      ? rememberUsageProbeResult(
+          usageCacheKey,
+          makeUnavailableUsageLimits({
+            source: "codexAppServer",
+            checkedAt,
+            reason: "Usage limits unavailable for API key Codex accounts.",
+          }),
+          nowMs,
+        )
+      : cachedUsage?.skipProbe
+        ? cachedUsage.limits
+        : rememberUsageProbeResult(
+            usageCacheKey,
+            resolveCodexRateLimitSnapshotUsageLimits({
+              checkedAt,
+              ...(snapshot.rateLimits ? { snapshot: snapshot.rateLimits } : {}),
+            }),
+            nowMs,
+          );
 
   return buildServerProvider({
     presentation: CODEX_PRESENTATION,
@@ -689,7 +718,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
       status: accountStatus.status,
       auth: accountStatus.auth,
       ...(accountStatus.message ? { message: accountStatus.message } : {}),
-      usageLimits,
+      ...(usageLimits ? { usageLimits } : {}),
     },
   });
 });

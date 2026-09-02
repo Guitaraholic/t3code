@@ -8,11 +8,19 @@ import {
   type RawUsageWindowInput,
 } from "./providerUsageLimits.ts";
 
-const CODEX_SESSION_WINDOW_DURATION_MINS = 300; // ~5 hours (short / session window)
-const CODEX_WEEKLY_WINDOW_DURATION_MINS = 10080; // 7 days (weekly window)
-const CODEX_MONTHLY_WINDOW_DURATION_MINS = 30 * 24 * 60;
+const CODEX_WINDOW_PRESENTATIONS = [
+  { minutes: 5 * 60, kind: "session" as const, label: "Session" },
+  { minutes: 24 * 60, kind: "session" as const, label: "Day" },
+  { minutes: 7 * 24 * 60, kind: "weekly" as const, label: "Weekly" },
+  { minutes: 30 * 24 * 60, kind: "monthly" as const, label: "Monthly" },
+  { minutes: 365 * 24 * 60, kind: "monthly" as const, label: "Year" },
+] as const;
 
 const UNAVAILABLE_REASON = "No Codex subscription quota windows reported.";
+
+function isApproximateCodexWindow(actualMinutes: number, expectedMinutes: number): boolean {
+  return actualMinutes >= expectedMinutes * 0.95 && actualMinutes <= expectedMinutes * 1.05;
+}
 
 /** Minimal structural view of a Codex rate-limit window. */
 export interface CodexRateLimitWindow {
@@ -45,33 +53,40 @@ export function resolveCodexRateLimitSnapshotUsageLimits(input: {
     });
   }
 
-  const reported = [input.snapshot.primary, input.snapshot.secondary].filter(
-    (window): window is CodexRateLimitWindow =>
-      Boolean(window) && Number.isFinite(window?.usedPercent),
+  const reported = [
+    { window: input.snapshot.primary, position: "primary" as const },
+    { window: input.snapshot.secondary, position: "secondary" as const },
+  ].filter(
+    (entry): entry is { window: CodexRateLimitWindow; position: "primary" | "secondary" } =>
+      Boolean(entry.window) && Number.isFinite(entry.window?.usedPercent),
   );
-  const isMonthlyPlan = input.snapshot.planType === "free" || input.snapshot.planType === "go";
-  const planWindows = isMonthlyPlan ? reported.slice(0, 1) : reported;
 
-  // `primary`/`secondary` are positions, not durations. Prefer the duration
-  // supplied by Codex, but use plan-aware fallbacks when older servers omit it:
-  // Free and Go expose one monthly allowance, while paid personal plans expose
-  // the 5-hour session and weekly allowances. A lone duration-less paid window
-  // remains weekly because Codex has shipped that response shape.
-  const windows: RawUsageWindowInput[] = planWindows.map((window, index) => {
-    const durationMins = isMonthlyPlan
-      ? CODEX_MONTHLY_WINDOW_DURATION_MINS
-      : typeof window.windowDurationMins === "number"
+  // Durations are classified with the Codex TUI's ±5% tolerance. Missing or
+  // unknown durations keep a neutral label instead of guessing 5h vs weekly
+  // from primary/secondary position.
+  const windows: RawUsageWindowInput[] = reported.map(({ window, position }) => {
+    const durationMins =
+      typeof window.windowDurationMins === "number" && Number.isFinite(window.windowDurationMins)
         ? window.windowDurationMins
-        : planWindows.length > 1 && index === 0
-          ? CODEX_SESSION_WINDOW_DURATION_MINS
-          : CODEX_WEEKLY_WINDOW_DURATION_MINS;
+        : undefined;
+    const known =
+      durationMins === undefined
+        ? undefined
+        : CODEX_WINDOW_PRESENTATIONS.find((candidate) =>
+            isApproximateCodexWindow(durationMins, candidate.minutes),
+          );
     const resetsAt =
       typeof window.resetsAt === "number" ? epochSecondsToIso(window.resetsAt) : undefined;
+    const kind = known?.kind ?? (position === "primary" ? "session" : "weekly");
+    const label = known?.label ?? (position === "primary" ? "Usage" : "Secondary");
+    const roundedDuration =
+      durationMins === undefined ? undefined : Math.max(0, Math.round(durationMins));
     return {
-      key: `duration:${durationMins}`,
-      label: "",
+      key: roundedDuration !== undefined ? `duration:${roundedDuration}` : `codex:${position}`,
+      kind,
+      label,
       usedPercent: window.usedPercent,
-      windowDurationMins: durationMins,
+      ...(roundedDuration !== undefined ? { windowDurationMins: roundedDuration } : {}),
       ...(resetsAt ? { resetsAt } : {}),
     };
   });

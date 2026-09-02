@@ -70,6 +70,12 @@ describe("providerUsageLimits", () => {
     expect(windowKindFromDuration({ windowDurationMins: 43_200 })).toBe("monthly");
   });
 
+  it("classifies Codex-style durations with a 5 percent tolerance", () => {
+    expect(windowKindFromDuration({ windowDurationMins: 41_040 })).toBe("monthly");
+    expect(windowKindFromDuration({ windowDurationMins: 10_100 })).toBe("weekly");
+    expect(windowKindFromDuration({ windowDurationMins: 285 })).toBe("session");
+  });
+
   it("keeps intermediate windows as session instead of dropping them", () => {
     expect(
       makeUsageLimitsSnapshot({

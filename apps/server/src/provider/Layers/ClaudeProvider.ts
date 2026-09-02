@@ -34,6 +34,7 @@ import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
 import { discoverClaudeSkills } from "../Drivers/ClaudeSkills.ts";
 import { probeClaudeUsageLimits } from "../claudeUsageProbe.ts";
 import { makeUnavailableUsageLimits } from "../providerUsageLimits.ts";
+import { cachedUsageProbe, makeProviderUsageProbeCacheKey } from "../providerUsageProbeCache.ts";
 import {
   BUNDLED_CLAUDE_MODEL_CATALOG,
   type ClaudeModelCatalog,
@@ -532,13 +533,21 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
             checkedAt,
             reason: "Usage limits unavailable for Amazon Bedrock accounts.",
           })
-        : yield* probeClaudeUsageLimits({
-            binaryPath: claudeSettings.binaryPath,
-            launchArgs: claudeSettings.launchArgs,
-            cwd,
-            checkedAt,
-            environment: yield* makeClaudeEnvironment(claudeSettings, environment),
-          }).pipe(Effect.map((result) => result.usageLimits));
+        : yield* cachedUsageProbe({
+            cacheKey: makeProviderUsageProbeCacheKey({
+              driver: "claude",
+              binaryPath: claudeSettings.binaryPath,
+              homePath: claudeSettings.homePath,
+              ...(claudeSettings.launchArgs ? { launchArgs: claudeSettings.launchArgs } : {}),
+            }),
+            probe: probeClaudeUsageLimits({
+              binaryPath: claudeSettings.binaryPath,
+              launchArgs: claudeSettings.launchArgs,
+              cwd,
+              checkedAt,
+              environment: yield* makeClaudeEnvironment(claudeSettings, environment),
+            }).pipe(Effect.map((result) => result.usageLimits)),
+          });
 
   if (!capabilities) {
     return buildServerProvider({
@@ -554,7 +563,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
         status: "warning",
         auth: { status: "unknown" },
         message: "Could not verify Claude authentication status from initialization result.",
-        usageLimits,
+        ...(usageLimits ? { usageLimits } : {}),
       },
     });
   }

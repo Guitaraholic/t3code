@@ -2,6 +2,7 @@ import type { ServerProviderUsageLimits, ServerProviderUsageWindow } from "@t3to
 
 export interface RawUsageWindowInput {
   readonly key?: string;
+  readonly kind?: ServerProviderUsageWindow["kind"];
   readonly label: string;
   readonly usedPercent: number;
   readonly resetsAt?: string;
@@ -15,6 +16,10 @@ export function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
+function isApproximateDuration(actual: number, expected: number): boolean {
+  return actual >= expected * 0.95 && actual <= expected * 1.05;
+}
+
 export function windowKindFromDuration(input: {
   readonly windowDurationMins?: number;
   readonly shortestWindowDurationMins?: number;
@@ -24,10 +29,15 @@ export function windowKindFromDuration(input: {
   if (typeof duration !== "number" || !Number.isFinite(duration)) {
     return undefined;
   }
-  if (duration >= 30 * 24 * 60) {
+  if (
+    isApproximateDuration(duration, 365 * 24 * 60) ||
+    isApproximateDuration(duration, 30 * 24 * 60) ||
+    duration >= 30 * 24 * 60
+  ) {
     return "monthly";
   }
   if (
+    isApproximateDuration(duration, 7 * 24 * 60) ||
     duration >= 7 * 24 * 60 ||
     (duration === input.longestWindowDurationMins &&
       input.longestWindowDurationMins !== input.shortestWindowDurationMins)
@@ -81,13 +91,15 @@ export function normalizeUsageWindows(
 
   return windows
     .flatMap((window) => {
-      const kind = windowKindFromDuration({
-        ...(typeof window.windowDurationMins === "number"
-          ? { windowDurationMins: window.windowDurationMins }
-          : {}),
-        ...(typeof shortestWindowDurationMins === "number" ? { shortestWindowDurationMins } : {}),
-        ...(typeof longestWindowDurationMins === "number" ? { longestWindowDurationMins } : {}),
-      });
+      const kind =
+        window.kind ??
+        windowKindFromDuration({
+          ...(typeof window.windowDurationMins === "number"
+            ? { windowDurationMins: window.windowDurationMins }
+            : {}),
+          ...(typeof shortestWindowDurationMins === "number" ? { shortestWindowDurationMins } : {}),
+          ...(typeof longestWindowDurationMins === "number" ? { longestWindowDurationMins } : {}),
+        });
       if (!kind) {
         return [];
       }
@@ -233,7 +245,9 @@ export function applyRuntimeUsageLimits(input: {
  * switched off a subscription), unlike a timed-out `/usage` probe which
  * should keep the last good snapshot.
  */
-function isAuthoritativeUsageUnavailable(limits: ServerProviderUsageLimits | undefined): boolean {
+export function isAuthoritativeUsageUnavailable(
+  limits: ServerProviderUsageLimits | undefined,
+): boolean {
   return (
     limits?.available === false &&
     (/\bAPI key\b/i.test(limits.reason ?? "") || /\bBedrock\b/i.test(limits.reason ?? ""))

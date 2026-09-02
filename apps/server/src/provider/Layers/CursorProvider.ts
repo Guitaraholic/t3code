@@ -46,6 +46,7 @@ import {
   type ProviderMaintenanceCapabilities,
 } from "../providerMaintenance.ts";
 import { probeCursorUsageLimits } from "../cursorUsageProbe.ts";
+import { cachedUsageProbe, makeProviderUsageProbeCacheKey } from "../providerUsageProbeCache.ts";
 import * as AcpSessionRuntime from "../acp/AcpSessionRuntime.ts";
 import { CursorListAvailableModelsResponse } from "../acp/CursorAcpExtension.ts";
 
@@ -1110,13 +1111,20 @@ export const checkCursorProviderStatus = Effect.fn("checkCursorProviderStatus")(
   const usageLimits =
     parsed.auth.status === "unauthenticated"
       ? undefined
-      : yield* probeCursorUsageLimits({
-          binaryPath: cursorSettings.binaryPath,
-          ...(cursorSettings.apiEndpoint ? { apiEndpoint: cursorSettings.apiEndpoint } : {}),
-          cwd,
-          checkedAt,
-          ...(environment ? { environment } : {}),
-        }).pipe(Effect.map((result) => result.usageLimits));
+      : yield* cachedUsageProbe({
+          cacheKey: makeProviderUsageProbeCacheKey({
+            driver: "cursor",
+            binaryPath: cursorSettings.binaryPath,
+            ...(cursorSettings.apiEndpoint ? { fallbackIdentity: cursorSettings.apiEndpoint } : {}),
+          }),
+          probe: probeCursorUsageLimits({
+            binaryPath: cursorSettings.binaryPath,
+            ...(cursorSettings.apiEndpoint ? { apiEndpoint: cursorSettings.apiEndpoint } : {}),
+            cwd,
+            checkedAt,
+            ...(environment ? { environment } : {}),
+          }).pipe(Effect.map((result) => result.usageLimits)),
+        });
 
   return buildCursorProviderSnapshot({
     checkedAt,

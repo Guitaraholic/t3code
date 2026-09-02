@@ -6,7 +6,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import type * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
-import { describe, expect, it } from "vite-plus/test";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 import type * as EffectAcpSchema from "effect-acp/schema";
 import type { CursorSettings } from "@t3tools/contracts";
 import { createModelCapabilities } from "@t3tools/shared/model";
@@ -24,6 +24,7 @@ import {
   resolveCursorAcpBaseModelId,
   resolveCursorAcpConfigUpdates,
 } from "./CursorProvider.ts";
+import { resetUsageProbeCacheForTests } from "../providerUsageProbeCache.ts";
 
 const runNode = <A, E>(
   effect: Effect.Effect<
@@ -454,6 +455,10 @@ describe("buildCursorCapabilitiesFromConfigOptions", () => {
 });
 
 describe("checkCursorProviderStatus", () => {
+  beforeEach(() => {
+    resetUsageProbeCacheForTests();
+  });
+
   it("reports the install docs when the Cursor CLI command is missing", async () => {
     const provider = await runNode(
       checkCursorProviderStatus({

@@ -50,33 +50,36 @@ describe("resolveCodexRateLimitSnapshotUsageLimits", () => {
     });
   });
 
-  it.each(["free", "go"] as const)("maps the %s plan to its monthly allowance", (planType) => {
-    const usage = resolveCodexRateLimitSnapshotUsageLimits({
-      checkedAt: CHECKED_AT,
-      snapshot: {
-        planType,
-        primary: {
-          usedPercent: 25,
-          resetsAt: PRIMARY_RESETS_AT_SECONDS,
-          windowDurationMins: 10080,
+  it.each(["free", "go"] as const)(
+    "keeps the %s plan's reported durations instead of rewriting them as monthly",
+    (planType) => {
+      const usage = resolveCodexRateLimitSnapshotUsageLimits({
+        checkedAt: CHECKED_AT,
+        snapshot: {
+          planType,
+          primary: {
+            usedPercent: 25,
+            resetsAt: PRIMARY_RESETS_AT_SECONDS,
+            windowDurationMins: 10080,
+          },
+          secondary: { usedPercent: 50, windowDurationMins: 300 },
         },
-        secondary: { usedPercent: 50, windowDurationMins: 300 },
-      },
-    });
+      });
 
-    expect(usage.windows).toEqual([
-      {
-        key: "duration:43200",
-        kind: "monthly",
-        label: "Monthly",
-        usedPercent: 25,
-        windowDurationMins: 43200,
-        resetsAt: PRIMARY_RESETS_AT_ISO,
-      },
-    ]);
-  });
+      expect(
+        usage.windows.map(({ kind, label, windowDurationMins }) => ({
+          kind,
+          label,
+          windowDurationMins,
+        })),
+      ).toEqual([
+        { kind: "session", label: "Session", windowDurationMins: 300 },
+        { kind: "weekly", label: "Weekly", windowDurationMins: 10080 },
+      ]);
+    },
+  );
 
-  it("uses provider window defaults when durations are omitted", () => {
+  it("uses neutral labels when durations are omitted instead of guessing 5h vs weekly", () => {
     const usage = resolveCodexRateLimitSnapshotUsageLimits({
       checkedAt: CHECKED_AT,
       snapshot: {
@@ -86,14 +89,19 @@ describe("resolveCodexRateLimitSnapshotUsageLimits", () => {
     });
 
     expect(
-      usage.windows.map(({ kind, windowDurationMins }) => ({ kind, windowDurationMins })),
+      usage.windows.map(({ key, kind, label, windowDurationMins }) => ({
+        key,
+        kind,
+        label,
+        windowDurationMins,
+      })),
     ).toEqual([
-      { kind: "session", windowDurationMins: 300 },
-      { kind: "weekly", windowDurationMins: 10080 },
+      { key: "codex:primary", kind: "session", label: "Usage", windowDurationMins: undefined },
+      { key: "codex:secondary", kind: "weekly", label: "Secondary", windowDurationMins: undefined },
     ]);
   });
 
-  it("labels a lone primary window as weekly now that Codex dropped the session limit", () => {
+  it("keeps a lone duration-less primary as Usage instead of inventing a weekly window", () => {
     const usage = resolveCodexRateLimitSnapshotUsageLimits({
       checkedAt: CHECKED_AT,
       snapshot: {
@@ -103,13 +111,25 @@ describe("resolveCodexRateLimitSnapshotUsageLimits", () => {
 
     expect(usage.windows).toEqual([
       {
-        key: "duration:10080",
-        kind: "weekly",
-        label: "Weekly",
+        key: "codex:primary",
+        kind: "session",
+        label: "Usage",
         usedPercent: 100,
-        windowDurationMins: 10080,
         resetsAt: PRIMARY_RESETS_AT_ISO,
       },
+    ]);
+  });
+
+  it("classifies near-weekly Codex durations with a 5 percent tolerance", () => {
+    const usage = resolveCodexRateLimitSnapshotUsageLimits({
+      checkedAt: CHECKED_AT,
+      snapshot: {
+        primary: { usedPercent: 42, windowDurationMins: 10_100 },
+      },
+    });
+
+    expect(usage.windows.map(({ kind, label }) => ({ kind, label }))).toEqual([
+      { kind: "weekly", label: "Weekly" },
     ]);
   });
 
