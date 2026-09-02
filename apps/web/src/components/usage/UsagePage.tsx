@@ -214,7 +214,7 @@ export function UsagePage() {
             {settling ? (
               <>
                 {environments.length > 1 ? <UsageDeviceStrip environments={environments} /> : null}
-                <UsageSkeleton />
+                <UsageSkeleton metric={metric} />
               </>
             ) : (
               <>
@@ -224,82 +224,87 @@ export function UsagePage() {
                   staleEnvironments={merged.staleEnvironments}
                 />
 
-                <section className="grid gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
-                  <div className="flex min-w-0 flex-col gap-5">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-4xl font-semibold text-foreground tabular-nums">
-                        {metric === "cost"
-                          ? formatUsd(merged.costUsd)
-                          : formatTokens(merged.totalTokens)}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {metric === "cost"
-                          ? `${formatCount(merged.sessions)} sessions · API estimate`
-                          : `${formatCount(merged.sessions)} sessions`}
-                      </span>
-                    </div>
+                <section className="grid gap-4">
+                  <TranscriptUsageHeading metric={metric} />
+                  <div className="grid gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+                    <div className="flex min-w-0 flex-col gap-5">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-4xl font-semibold text-foreground tabular-nums">
+                          {metric === "cost"
+                            ? formatUsd(merged.costUsd)
+                            : formatTokens(merged.totalTokens)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {metric === "cost"
+                            ? `${formatCount(merged.sessions)} sessions · API estimate`
+                            : `${formatCount(merged.sessions)} sessions`}
+                        </span>
+                      </div>
 
-                    {activeProviders.map((provider) => {
-                      const totals = merged.providers.find((entry) => entry.provider === provider);
-                      const share =
-                        metric === "cost" ? (totals?.costShare ?? 0) : (totals?.tokenShare ?? 0);
-                      const providerSessions = totals?.sessions ?? 0;
-                      const sessionLabel = `${formatCount(providerSessions)} ${
-                        providerSessions === 1 ? "session" : "sessions"
-                      }`;
-                      return (
-                        <div key={provider} className="flex flex-col gap-1">
-                          <div className="flex items-baseline justify-between gap-4">
-                            <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
-                              <span
-                                aria-hidden
-                                className="size-2 shrink-0 rounded-full"
-                                style={{
-                                  backgroundColor: PROVIDER_PRESENTATION[provider].color,
-                                }}
-                              />
-                              <ProviderMark provider={provider} className="size-4" />
-                              <span className="flex min-w-0 items-baseline gap-1.5">
-                                <span className="truncate">
-                                  {PROVIDER_PRESENTATION[provider].label}
-                                </span>
-                                <span className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground tabular-nums">
-                                  {sessionLabel}
+                      {activeProviders.map((provider) => {
+                        const totals = merged.providers.find(
+                          (entry) => entry.provider === provider,
+                        );
+                        const share =
+                          metric === "cost" ? (totals?.costShare ?? 0) : (totals?.tokenShare ?? 0);
+                        const providerSessions = totals?.sessions ?? 0;
+                        const sessionLabel = `${formatCount(providerSessions)} ${
+                          providerSessions === 1 ? "session" : "sessions"
+                        }`;
+                        return (
+                          <div key={provider} className="flex flex-col gap-1">
+                            <div className="flex items-baseline justify-between gap-4">
+                              <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
+                                <span
+                                  aria-hidden
+                                  className="size-2 shrink-0 rounded-full"
+                                  style={{
+                                    backgroundColor: PROVIDER_PRESENTATION[provider].color,
+                                  }}
+                                />
+                                <ProviderMark provider={provider} className="size-4" />
+                                <span className="flex min-w-0 items-baseline gap-1.5">
+                                  <span className="truncate">
+                                    {PROVIDER_PRESENTATION[provider].label}
+                                  </span>
+                                  <span className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground tabular-nums">
+                                    {sessionLabel}
+                                  </span>
                                 </span>
                               </span>
-                            </span>
-                            <span className="shrink-0 text-sm font-medium text-foreground tabular-nums">
+                              <span className="shrink-0 text-sm font-medium text-foreground tabular-nums">
+                                {metric === "cost"
+                                  ? formatUsd(totals?.costUsd ?? 0)
+                                  : formatTokens(totals?.totalTokens ?? 0)}
+                              </span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
                               {metric === "cost"
-                                ? formatUsd(totals?.costUsd ?? 0)
-                                : formatTokens(totals?.totalTokens ?? 0)}
+                                ? `${formatPercent(share)} of cost · ${formatTokens(totals?.totalTokens ?? 0)} tokens`
+                                : `${formatPercent(share)} of tokens · ${formatUsd(totals?.costUsd ?? 0)}`}
                             </span>
                           </div>
-                          <span className="text-xs text-muted-foreground">
-                            {metric === "cost"
-                              ? `${formatPercent(share)} of cost · ${formatTokens(totals?.totalTokens ?? 0)} tokens`
-                              : `${formatPercent(share)} of tokens · ${formatUsd(totals?.costUsd ?? 0)}`}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
 
-                  <div className="flex min-w-0 flex-col gap-3">
-                    <h2 className="text-sm font-medium text-foreground">
-                      {isPast24Hours ? "Hourly" : "Daily"}{" "}
-                      {metric === "tokens" ? "processed tokens" : "cost"}
-                    </h2>
-                    <UsageProviderChart
-                      providers={activeProviders}
-                      days={days}
-                      daily={merged.daily}
-                      hours={hours}
-                      hourly={merged.hourly}
-                      metric={metric}
-                      referenceTime={window.untilTime}
-                      resolution={isPast24Hours ? "hour" : "day"}
-                      timeZone={window.timeZone}
-                    />
+                    <div className="flex min-w-0 flex-col gap-3">
+                      <p className="text-sm font-medium text-foreground">
+                        {isPast24Hours ? "Hourly" : "Daily"}{" "}
+                        {metric === "tokens" ? "processed tokens" : "cost"}
+                      </p>
+                      <UsageProviderChart
+                        providers={activeProviders}
+                        days={days}
+                        daily={merged.daily}
+                        hours={hours}
+                        hourly={merged.hourly}
+                        metric={metric}
+                        referenceTime={window.untilTime}
+                        resolution={isPast24Hours ? "hour" : "day"}
+                        timeZone={window.timeZone}
+                      />
+                    </div>
                   </div>
                 </section>
 
@@ -467,6 +472,19 @@ export function UsagePage() {
   );
 }
 
+function TranscriptUsageHeading(props: { readonly metric: UsageChartMetric }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <h2 className="text-sm font-medium text-foreground">
+        {props.metric === "cost" ? "Token cost" : "Processed tokens"}
+      </h2>
+      <p className="text-xs text-muted-foreground">
+        API-equivalent estimates from local transcripts.
+      </p>
+    </div>
+  );
+}
+
 /** Brand mark for the harness a row belongs to. */
 function ProviderMark({
   provider,
@@ -591,35 +609,38 @@ function UsageDeviceStrip({
  * Static stand-in with the loaded page's shape. No shimmer; blocks fill in
  * exactly once when the last device answers.
  */
-function UsageSkeleton() {
+function UsageSkeleton(props: { readonly metric: UsageChartMetric }) {
   return (
     <>
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-1">
-            <div className="h-10 w-36 rounded-sm bg-muted" />
-            <div className="h-4 w-32 rounded-sm bg-muted" />
-          </div>
-          {PROVIDER_ORDER.map((provider) => (
-            <div key={provider} className="flex flex-col gap-1">
-              <div className="flex min-h-5 items-center justify-between gap-4">
-                <span className="flex items-center gap-2">
-                  <span className="size-2 shrink-0 rounded-full bg-muted" />
-                  <span className="size-4 shrink-0 rounded-full bg-muted" />
-                  <div className="h-3.5 w-20 rounded-sm bg-muted" />
-                </span>
-                <div className="h-3.5 w-14 rounded-sm bg-muted" />
-              </div>
-              <div className="h-4 w-36 rounded-sm bg-muted" />
+      <section className="grid gap-4">
+        <TranscriptUsageHeading metric={props.metric} />
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-1">
+              <div className="h-10 w-36 rounded-sm bg-muted" />
+              <div className="h-4 w-32 rounded-sm bg-muted" />
             </div>
-          ))}
-        </div>
+            {PROVIDER_ORDER.map((provider) => (
+              <div key={provider} className="flex flex-col gap-1">
+                <div className="flex min-h-5 items-center justify-between gap-4">
+                  <span className="flex items-center gap-2">
+                    <span className="size-2 shrink-0 rounded-full bg-muted" />
+                    <span className="size-4 shrink-0 rounded-full bg-muted" />
+                    <div className="h-3.5 w-20 rounded-sm bg-muted" />
+                  </span>
+                  <div className="h-3.5 w-14 rounded-sm bg-muted" />
+                </div>
+                <div className="h-4 w-36 rounded-sm bg-muted" />
+              </div>
+            ))}
+          </div>
 
-        <div className="flex flex-col gap-3">
-          <div className="h-5 w-24 rounded-sm bg-muted" />
-          <div className="flex flex-col gap-1">
-            <div className="ml-16 h-56 rounded-sm bg-muted/35" />
-            <div className="ml-16 h-4 rounded-sm bg-muted/35" />
+          <div className="flex flex-col gap-3">
+            <div className="h-5 w-24 rounded-sm bg-muted" />
+            <div className="flex flex-col gap-1">
+              <div className="ml-16 h-56 rounded-sm bg-muted/35" />
+              <div className="ml-16 h-4 rounded-sm bg-muted/35" />
+            </div>
           </div>
         </div>
       </section>

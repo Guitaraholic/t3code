@@ -231,7 +231,7 @@ export function ProviderQuotaLimitsSection() {
       <div className="flex flex-col gap-1">
         <h2 className="text-sm font-medium text-foreground">Provider limits</h2>
         <p className="text-xs text-muted-foreground">
-          Remaining subscription windows from each provider. Separate from the raw token cost below.
+          Remaining subscription windows from each provider.
         </p>
       </div>
       {groups.map((group) => (

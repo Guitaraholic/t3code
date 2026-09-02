@@ -9,8 +9,8 @@ Grok Build totals come from persisted session updates. Interactive turns that ne
 completed-turn record will not appear.
 
 **Provider limits** at the top of the page are the remaining subscription windows from each
-provider (session, weekly, included, and similar). Those bars are independent of the raw token
-cost below. Subscription billing is also separate from that token cost.
+provider (session, weekly, included, and similar). **Token cost** below that is the API-equivalent
+estimate from local transcripts, with the chart and provider shares.
 
 Use **Past 24h** for an hourly chart covering the exact rolling 24-hour period. The **7 days**,
 **30 days**, and **90 days** ranges use daily resolution. Cost and token toggles update both the
