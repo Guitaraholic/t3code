@@ -657,4 +657,48 @@ describe("makeManagedServerProvider", () => {
       }),
     ).pipe(Effect.provide(AlwaysRunTestLayer)),
   );
+
+  it.effect("does not republish when a live usage event leaves the bars unchanged", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const existingUsageLimits = {
+          source: "codexAppServer" as const,
+          available: true as const,
+          checkedAt: "2026-08-09T10:00:00.000Z",
+          windows: [
+            {
+              kind: "weekly" as const,
+              label: "Weekly",
+              usedPercent: 80,
+              windowDurationMins: 10_080,
+            },
+          ],
+        };
+        const provider = yield* makeManagedServerProvider<TestSettings>({
+          maintenanceCapabilities,
+          getSettings: Effect.succeed({ enabled: true }),
+          streamSettings: Stream.empty,
+          haveSettingsChanged: (previous, next) => previous.enabled !== next.enabled,
+          initialSnapshot: () =>
+            Effect.succeed({
+              ...initialSnapshot,
+              usageLimits: existingUsageLimits,
+            }),
+          checkProvider: Effect.succeed(refreshedSnapshot),
+          refreshOnInterval: false,
+          refreshInterval: "1 hour",
+        });
+
+        yield* provider.applyUsageLimits({
+          source: "codexAppServer",
+          checkedAt: "2026-08-09T11:00:00.000Z",
+          windows: [{ label: "Weekly", usedPercent: 80, windowDurationMins: 10_080 }],
+        });
+
+        const latest = yield* provider.getSnapshot;
+        assert.strictEqual(latest.usageLimits, existingUsageLimits);
+        assert.strictEqual(latest.usageLimits?.checkedAt, "2026-08-09T10:00:00.000Z");
+      }),
+    ).pipe(Effect.provide(AlwaysRunTestLayer)),
+  );
 });

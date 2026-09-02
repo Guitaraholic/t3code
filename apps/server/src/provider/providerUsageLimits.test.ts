@@ -36,12 +36,14 @@ describe("providerUsageLimits", () => {
       }).windows,
     ).toEqual([
       {
+        key: "session:Five hour:300",
         kind: "session",
         label: "Five hour",
         usedPercent: 10,
         windowDurationMins: 300,
       },
       {
+        key: "weekly:Seven day:10080",
         kind: "weekly",
         label: "Seven day",
         usedPercent: 20,
@@ -82,18 +84,21 @@ describe("providerUsageLimits", () => {
       }).windows,
     ).toEqual([
       {
+        key: "session:Short:60",
         kind: "session",
         label: "Short",
         usedPercent: 10,
         windowDurationMins: 60,
       },
       {
+        key: "session:Middle:1440",
         kind: "session",
         label: "Middle",
         usedPercent: 20,
         windowDurationMins: 1440,
       },
       {
+        key: "weekly:Long:4320",
         kind: "weekly",
         label: "Long",
         usedPercent: 30,
@@ -136,6 +141,7 @@ describe("applyRuntimeUsageLimits", () => {
 
     expect(next?.windows.map((window) => window.label)).toEqual(["Session", "Weekly", "Fable"]);
     expect(next?.windows.find((window) => window.label === "Fable")).toEqual({
+      key: "weekly:Fable:10080",
       kind: "weekly",
       label: "Fable",
       usedPercent: 95,
@@ -154,6 +160,7 @@ describe("applyRuntimeUsageLimits", () => {
     expect(next?.checkedAt).toBe("2026-08-09T11:00:00.000Z");
     expect(next?.windows).toEqual([
       {
+        key: "session:Session:300",
         kind: "session",
         label: "Session",
         usedPercent: 55,
@@ -163,6 +170,20 @@ describe("applyRuntimeUsageLimits", () => {
       },
       previous.windows[1],
     ]);
+  });
+
+  it("keeps the previous snapshot when the windows did not move", () => {
+    const next = applyRuntimeUsageLimits({
+      previous,
+      source: "claudeStatusProbe",
+      checkedAt: "2026-08-09T11:00:00.000Z",
+      windows: [
+        { label: "Session", usedPercent: 10, windowDurationMins: 300 },
+        { label: "Weekly", usedPercent: 20, windowDurationMins: 10_080 },
+      ],
+    });
+
+    expect(next).toBe(previous);
   });
 
   it("keeps the previous snapshot when the update parses to nothing", () => {
@@ -194,7 +215,15 @@ describe("applyRuntimeUsageLimits", () => {
       source: "claudeStatusProbe",
       available: true,
       checkedAt: "2026-08-09T11:00:00.000Z",
-      windows: [{ kind: "weekly", label: "Weekly", usedPercent: 30, windowDurationMins: 10_080 }],
+      windows: [
+        {
+          key: "weekly:Weekly:10080",
+          kind: "weekly",
+          label: "Weekly",
+          usedPercent: 30,
+          windowDurationMins: 10_080,
+        },
+      ],
     });
   });
 

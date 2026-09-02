@@ -132,6 +132,7 @@ export function parseCursorUsageLimitsOutput(input: {
       source: "cursorStatusProbe",
       checkedAt: input.checkedAt,
       windows: rows.map((row) => ({
+        key: `cursor:${row.label}`,
         label: row.label,
         usedPercent: row.usedPercent,
         windowDurationMins: CURSOR_MONTHLY_WINDOW_DURATION_MINS,

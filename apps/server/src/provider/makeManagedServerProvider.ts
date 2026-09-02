@@ -1,7 +1,6 @@
 import {
   DEFAULT_PROVIDER_HEALTH_REFRESH_INTERVAL,
   type ServerProvider,
-  type ServerProviderUsageWindow,
   ServerSettingsError,
 } from "@t3tools/contracts";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
@@ -18,14 +17,18 @@ import * as Semaphore from "effect/Semaphore";
 
 import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
-import { applyRuntimeUsageLimits, resolveUsageLimitsAfterRefresh } from "./providerUsageLimits.ts";
+import {
+  applyRuntimeUsageLimits,
+  resolveUsageLimitsAfterRefresh,
+  usageWindowIdentity,
+} from "./providerUsageLimits.ts";
 import type { ServerProviderShape } from "./Services/ServerProvider.ts";
 
 interface ProviderSnapshotState {
   readonly snapshot: ServerProvider;
   readonly enrichmentGeneration: number;
   readonly usageEpoch: number;
-  readonly usageWindowEpochs: ReadonlyMap<ServerProviderUsageWindow["kind"], number>;
+  readonly usageWindowEpochs: ReadonlyMap<string, number>;
 }
 
 export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(function* <
@@ -155,9 +158,12 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
             : ([] as const);
         const usageWindowEpochs = new Map(state.usageWindowEpochs);
         for (const nextWindow of nextUsageLimits.windows) {
-          const previousWindow = previousWindows.find((window) => window.kind === nextWindow.kind);
+          const nextIdentity = usageWindowIdentity(nextWindow);
+          const previousWindow = previousWindows.find(
+            (window) => usageWindowIdentity(window) === nextIdentity,
+          );
           if (!Equal.equals(previousWindow, nextWindow)) {
-            usageWindowEpochs.set(nextWindow.kind, usageEpoch);
+            usageWindowEpochs.set(nextIdentity, usageEpoch);
           }
         }
         return [
@@ -208,7 +214,9 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
         const livePatchedWindows =
           state.snapshot.usageLimits?.available === true
             ? state.snapshot.usageLimits.windows.filter(
-                (window) => (state.usageWindowEpochs.get(window.kind) ?? 0) > usageEpochAtStart,
+                (window) =>
+                  (state.usageWindowEpochs.get(usageWindowIdentity(window)) ?? 0) >
+                  usageEpochAtStart,
               )
             : [];
         const usageLimits = resolveUsageLimitsAfterRefresh({

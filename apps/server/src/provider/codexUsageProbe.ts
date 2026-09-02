@@ -68,6 +68,7 @@ export function resolveCodexRateLimitSnapshotUsageLimits(input: {
     const resetsAt =
       typeof window.resetsAt === "number" ? epochSecondsToIso(window.resetsAt) : undefined;
     return {
+      key: `duration:${durationMins}`,
       label: "",
       usedPercent: window.usedPercent,
       windowDurationMins: durationMins,

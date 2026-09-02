@@ -162,6 +162,7 @@ describe("claudeUsageProbe", () => {
       checkedAt: "2026-04-17T10:00:00.000Z",
       windows: [
         {
+          key: "five_hour",
           kind: "session",
           label: "Session",
           usedPercent: 42,
@@ -169,6 +170,7 @@ describe("claudeUsageProbe", () => {
           resetsAt: "2026-04-17T14:00:00.000Z",
         },
         {
+          key: "seven_day",
           kind: "weekly",
           label: "Weekly",
           usedPercent: 68,
@@ -224,6 +226,7 @@ describe("claudeUsageProbe", () => {
       checkedAt: "2026-04-17T10:00:00.000Z",
       windows: [
         {
+          key: "five_hour",
           kind: "session",
           label: "Session",
           usedPercent: 42,
@@ -300,6 +303,7 @@ describe("claudeUsageProbe", () => {
     expect(parsed.available).toBe(true);
     expect(parsed.windows).toEqual([
       {
+        key: "five_hour",
         kind: "session",
         label: "Session",
         usedPercent: 10,

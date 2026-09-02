@@ -139,6 +139,7 @@ describe("cursorUsageProbe", () => {
     expect(parsed.source).toBe("cursorStatusProbe");
     expect(parsed.windows).toEqual([
       {
+        key: "cursor:Auto",
         kind: "monthly",
         label: "Auto",
         usedPercent: 10,
@@ -146,6 +147,7 @@ describe("cursorUsageProbe", () => {
         resetsAt: "2026-08-07T00:00:00.000Z",
       },
       {
+        key: "cursor:API",
         kind: "monthly",
         label: "API",
         usedPercent: 13,
@@ -171,6 +173,7 @@ describe("cursorUsageProbe", () => {
 
     expect(parsed.windows).toEqual([
       {
+        key: "cursor:Auto",
         kind: "monthly",
         label: "Auto",
         usedPercent: 2,
@@ -178,6 +181,7 @@ describe("cursorUsageProbe", () => {
         resetsAt: "2026-09-16T00:00:00.000Z",
       },
       {
+        key: "cursor:API",
         kind: "monthly",
         label: "API",
         usedPercent: 0,

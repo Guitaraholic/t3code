@@ -1,6 +1,7 @@
 import type { ServerProviderUsageLimits, ServerProviderUsageWindow } from "@t3tools/contracts";
 
 export interface RawUsageWindowInput {
+  readonly key?: string;
   readonly label: string;
   readonly usedPercent: number;
   readonly resetsAt?: string;
@@ -44,6 +45,28 @@ function compareUsageWindowKinds(
   return order[left] - order[right];
 }
 
+/**
+ * Stable identity for upsert, live-patch epochs, and list keys. Prefer the
+ * provider's own id; fall back to the display triple for payloads that predate
+ * `key`.
+ */
+export function usageWindowIdentity(
+  window: Pick<ServerProviderUsageWindow, "key" | "kind" | "label" | "windowDurationMins">,
+): string {
+  const key = window.key?.trim();
+  return key && key.length > 0
+    ? key
+    : `${window.kind}:${window.label}:${window.windowDurationMins ?? ""}`;
+}
+
+function defaultUsageWindowKey(
+  kind: ServerProviderUsageWindow["kind"],
+  label: string,
+  windowDurationMins: number | undefined,
+): string {
+  return usageWindowIdentity({ kind, label, windowDurationMins });
+}
+
 export function normalizeUsageWindows(
   windows: ReadonlyArray<RawUsageWindowInput>,
 ): ReadonlyArray<ServerProviderUsageWindow> {
@@ -71,16 +94,23 @@ export function normalizeUsageWindows(
       const trimmedLabel = window.label.trim();
       const defaultLabel =
         kind === "session" ? "Session" : kind === "weekly" ? "Weekly" : "Monthly";
+      const label = trimmedLabel.length > 0 ? trimmedLabel : defaultLabel;
+      const windowDurationMins =
+        typeof window.windowDurationMins === "number" && Number.isFinite(window.windowDurationMins)
+          ? Math.max(0, Math.round(window.windowDurationMins))
+          : undefined;
+      const providedKey = window.key?.trim();
       return [
         {
+          key:
+            providedKey && providedKey.length > 0
+              ? providedKey
+              : defaultUsageWindowKey(kind, label, windowDurationMins),
           kind,
-          label: trimmedLabel.length > 0 ? trimmedLabel : defaultLabel,
+          label,
           usedPercent: clampPercent(window.usedPercent),
           ...(window.resetsAt ? { resetsAt: window.resetsAt } : {}),
-          ...(typeof window.windowDurationMins === "number" &&
-          Number.isFinite(window.windowDurationMins)
-            ? { windowDurationMins: Math.max(0, Math.round(window.windowDurationMins)) }
-            : {}),
+          ...(windowDurationMins !== undefined ? { windowDurationMins } : {}),
         } satisfies ServerProviderUsageWindow,
       ];
     })
@@ -106,23 +136,20 @@ export function makeUnavailableUsageLimits(input: {
  *
  * Both runtime sources emit *sparse* updates — Claude's `rate_limit_event`
  * carries one window at a time and Codex documents its notification as a
- * partial to merge into the last full read — so an update must upsert by kind
- * rather than replace the array, and must keep the previous `resetsAt` /
- * `windowDurationMins` when the update omits them. Otherwise a percent-only
- * event would drop the reset timestamp a probe had already resolved.
+ * partial to merge into the last full read — so an update must upsert by
+ * {@link usageWindowIdentity} rather than replace the array, and must keep the
+ * previous `resetsAt` / `windowDurationMins` when the update omits them.
+ * Otherwise a percent-only event would drop the reset timestamp a probe had
+ * already resolved.
  */
-function usageWindowMergeKey(window: ServerProviderUsageWindow): string {
-  return `${window.kind}:${window.label}:${window.windowDurationMins ?? ""}`;
-}
-
 export function mergeUsageLimitWindows(
   previous: ReadonlyArray<ServerProviderUsageWindow>,
   incoming: ReadonlyArray<ServerProviderUsageWindow>,
 ): ReadonlyArray<ServerProviderUsageWindow> {
-  const merged = new Map(previous.map((window) => [usageWindowMergeKey(window), window] as const));
+  const merged = new Map(previous.map((window) => [usageWindowIdentity(window), window] as const));
   for (const window of incoming) {
-    const existing = merged.get(usageWindowMergeKey(window));
-    merged.set(usageWindowMergeKey(window), {
+    const existing = merged.get(usageWindowIdentity(window));
+    merged.set(usageWindowIdentity(window), {
       ...window,
       ...(window.resetsAt === undefined && existing?.resetsAt !== undefined
         ? { resetsAt: existing.resetsAt }
@@ -137,11 +164,38 @@ export function mergeUsageLimitWindows(
   );
 }
 
+function sameUsageWindow(
+  left: ServerProviderUsageWindow,
+  right: ServerProviderUsageWindow,
+): boolean {
+  return (
+    usageWindowIdentity(left) === usageWindowIdentity(right) &&
+    left.kind === right.kind &&
+    left.label === right.label &&
+    left.usedPercent === right.usedPercent &&
+    left.resetsAt === right.resetsAt &&
+    left.windowDurationMins === right.windowDurationMins
+  );
+}
+
+function sameUsageWindows(
+  left: ReadonlyArray<ServerProviderUsageWindow>,
+  right: ReadonlyArray<ServerProviderUsageWindow>,
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((window, index) => {
+      const other = right[index];
+      return other !== undefined && sameUsageWindow(window, other);
+    })
+  );
+}
+
 /**
  * Apply a runtime usage update to whatever snapshot the provider currently
  * publishes. Returns `previous` untouched when the update carries no usable
- * window: a rolling event that parses to nothing must never clear bars that a
- * probe already established.
+ * window, or when the bars did not move: a rolling event that only restamps
+ * `checkedAt` must not republish the whole provider snapshot.
  */
 export function applyRuntimeUsageLimits(input: {
   readonly previous: ServerProviderUsageLimits | undefined;
@@ -156,10 +210,19 @@ export function applyRuntimeUsageLimits(input: {
 
   const previousWindows =
     input.previous?.available === true ? input.previous.windows : ([] as const);
+  const windows = mergeUsageLimitWindows(previousWindows, incoming);
+  if (
+    input.previous?.available === true &&
+    input.previous.source === input.source &&
+    sameUsageWindows(input.previous.windows, windows)
+  ) {
+    return input.previous;
+  }
+
   return {
     source: input.source,
     available: true,
-    windows: mergeUsageLimitWindows(previousWindows, incoming),
+    windows,
     checkedAt: input.checkedAt,
   };
 }

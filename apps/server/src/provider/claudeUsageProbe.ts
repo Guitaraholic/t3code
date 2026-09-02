@@ -219,11 +219,27 @@ function weeklyLabelFromSegment(segment: string): string {
   return scoped && scoped.length > 0 ? scoped : "Weekly";
 }
 
+const CLAUDE_FAMILY_WEEKLY_KEYS: Readonly<Record<string, string>> = {
+  opus: "seven_day_opus",
+  sonnet: "seven_day_sonnet",
+};
+
+function claudeUsageWindowKey(kind: "session" | "weekly", label: string): string {
+  if (kind === "session") {
+    return "five_hour";
+  }
+  if (label === "Weekly") {
+    return "seven_day";
+  }
+  return CLAUDE_FAMILY_WEEKLY_KEYS[label.toLowerCase()] ?? `weekly_scoped:${label}`;
+}
+
 function parseClaudeUsageWindowSegment(
   kind: "session" | "weekly",
   segment: string,
   checkedAt: string,
 ): {
+  readonly key: string;
   readonly label: string;
   readonly usedPercent: number;
   readonly windowDurationMins: number;
@@ -236,9 +252,11 @@ function parseClaudeUsageWindowSegment(
     return null;
   }
   const resetsAt = extractResetTimestamp(segment, checkedAt);
+  const label = kind === "session" ? "Session" : weeklyLabelFromSegment(segment);
 
   return {
-    label: kind === "session" ? "Session" : weeklyLabelFromSegment(segment),
+    key: claudeUsageWindowKey(kind, label),
+    label,
     usedPercent,
     windowDurationMins,
     ...(resetsAt ? { resetsAt } : {}),
@@ -249,6 +267,7 @@ function extractWindowSegments(
   output: string,
   checkedAt: string,
 ): ReadonlyArray<{
+  readonly key: string;
   readonly label: string;
   readonly usedPercent: number;
   readonly windowDurationMins: number;

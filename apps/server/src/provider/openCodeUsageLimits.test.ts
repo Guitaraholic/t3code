@@ -30,7 +30,14 @@ describe("resolveOpenCodeManagedUsageLimits", () => {
       source: "opencodeManaged",
       available: true,
       checkedAt: "2026-04-18T00:00:00.000Z",
-      windows: [{ kind: "session", label: "OpenCode Go", usedPercent: 32 }],
+      windows: [
+        {
+          key: "opencode:opencode-go",
+          kind: "session",
+          label: "OpenCode Go",
+          usedPercent: 32,
+        },
+      ],
     });
   });
 
@@ -63,8 +70,18 @@ describe("resolveOpenCodeManagedUsageLimits", () => {
     });
 
     expect(result?.windows).toEqual([
-      { kind: "session", label: "OpenCode Go", usedPercent: 10 },
-      { kind: "session", label: "OpenCode Zen", usedPercent: 50 },
+      {
+        key: "opencode:opencode-go",
+        kind: "session",
+        label: "OpenCode Go",
+        usedPercent: 10,
+      },
+      {
+        key: "opencode:opencode-zen",
+        kind: "session",
+        label: "OpenCode Zen",
+        usedPercent: 50,
+      },
     ]);
   });
 

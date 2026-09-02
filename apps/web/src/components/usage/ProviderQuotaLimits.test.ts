@@ -91,6 +91,17 @@ describe("provider usage presentation", () => {
 
     expect(getUsageWindowKey(openCodeGo)).not.toBe(getUsageWindowKey(openCodeZen));
   });
+
+  it("prefers the provider-owned window key when present", () => {
+    expect(
+      getUsageWindowKey({
+        key: "weekly_scoped:Fable",
+        kind: "weekly",
+        label: "Fable",
+        usedPercent: 95,
+      }),
+    ).toBe("weekly_scoped:Fable");
+  });
 });
 
 describe("shouldShowProviderQuota", () => {

@@ -57,7 +57,10 @@ export function sharedUsageResetAt(
 }
 
 export function getUsageWindowKey(window: ServerProviderUsageLimits["windows"][number]): string {
-  return `${window.kind}:${window.label}:${window.windowDurationMins ?? "unknown"}:${window.resetsAt ?? "none"}`;
+  const key = window.key?.trim();
+  return key && key.length > 0
+    ? key
+    : `${window.kind}:${window.label}:${window.windowDurationMins ?? "unknown"}:${window.resetsAt ?? "none"}`;
 }
 
 export function providerQuotaLabel(provider: ServerProvider): string {

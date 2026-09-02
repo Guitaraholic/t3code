@@ -31,6 +31,7 @@ describe("resolveCodexRateLimitSnapshotUsageLimits", () => {
       checkedAt: CHECKED_AT,
       windows: [
         {
+          key: "duration:300",
           kind: "session",
           label: "Session",
           usedPercent: 25,
@@ -38,6 +39,7 @@ describe("resolveCodexRateLimitSnapshotUsageLimits", () => {
           resetsAt: PRIMARY_RESETS_AT_ISO,
         },
         {
+          key: "duration:10080",
           kind: "weekly",
           label: "Weekly",
           usedPercent: 50,
@@ -64,6 +66,7 @@ describe("resolveCodexRateLimitSnapshotUsageLimits", () => {
 
     expect(usage.windows).toEqual([
       {
+        key: "duration:43200",
         kind: "monthly",
         label: "Monthly",
         usedPercent: 25,
@@ -100,6 +103,7 @@ describe("resolveCodexRateLimitSnapshotUsageLimits", () => {
 
     expect(usage.windows).toEqual([
       {
+        key: "duration:10080",
         kind: "weekly",
         label: "Weekly",
         usedPercent: 100,

@@ -86,6 +86,7 @@ export function parseGrokUsageLimitsOutput(input: {
       checkedAt: input.checkedAt,
       windows: [
         {
+          key: "weekly",
           label: "Weekly",
           usedPercent,
           windowDurationMins: 7 * 24 * 60,

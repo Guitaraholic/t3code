@@ -25,7 +25,13 @@ const claudeFiveHourEvent = {
 const claudeFiveHourWindows = {
   source: "claudeStatusProbe",
   windows: [
-    { label: "Session", usedPercent: 42, windowDurationMins: 300, resetsAt: RESETS_AT_ISO },
+    {
+      key: "five_hour",
+      label: "Session",
+      usedPercent: 42,
+      windowDurationMins: 300,
+      resetsAt: RESETS_AT_ISO,
+    },
   ],
 } as const;
 
@@ -66,6 +72,7 @@ describe("parseRuntimeUsageLimitsUpdate", () => {
 
     expect(update?.windows).toEqual([
       {
+        key: "weekly_scoped:Fable",
         label: "Fable",
         usedPercent: 95,
         windowDurationMins: 10080,
@@ -90,6 +97,7 @@ describe("parseRuntimeUsageLimitsUpdate", () => {
 
     expect(update?.windows).toEqual([
       {
+        key: "seven_day",
         label: "Weekly",
         usedPercent: 88,
         windowDurationMins: 10080,
@@ -113,6 +121,7 @@ describe("parseRuntimeUsageLimitsUpdate", () => {
       })?.windows,
     ).toEqual([
       {
+        key: "seven_day",
         label: "Weekly",
         usedPercent: 27,
         windowDurationMins: 10080,
@@ -170,14 +179,18 @@ describe("parseRuntimeUsageLimitsUpdate", () => {
         checkedAt: CHECKED_AT,
         rateLimits: { rate_limit_info: { rateLimitType: "seven_day_opus", utilization: 0.1 } },
       })?.windows,
-    ).toEqual([{ label: "Opus", usedPercent: 10, windowDurationMins: 10080 }]);
+    ).toEqual([
+      { key: "seven_day_opus", label: "Opus", usedPercent: 10, windowDurationMins: 10080 },
+    ]);
     expect(
       parseRuntimeUsageLimitsUpdate({
         driverKind: claudeDriver,
         checkedAt: CHECKED_AT,
         rateLimits: { rate_limit_info: { rateLimitType: "seven_day_sonnet", utilization: 0.1 } },
       })?.windows,
-    ).toEqual([{ label: "Sonnet", usedPercent: 10, windowDurationMins: 10080 }]);
+    ).toEqual([
+      { key: "seven_day_sonnet", label: "Sonnet", usedPercent: 10, windowDurationMins: 10080 },
+    ]);
     expect(
       parseRuntimeUsageLimitsUpdate({
         driverKind: claudeDriver,
@@ -210,7 +223,7 @@ describe("parseRuntimeUsageLimitsUpdate", () => {
           },
         },
       })?.windows,
-    ).toEqual([{ label: "Session", usedPercent: 40, windowDurationMins: 300 }]);
+    ).toEqual([{ key: "five_hour", label: "Session", usedPercent: 40, windowDurationMins: 300 }]);
   });
 
   it("reads a Codex rolling notification from its rateLimits envelope", () => {
@@ -231,7 +244,13 @@ describe("parseRuntimeUsageLimitsUpdate", () => {
     ).toEqual({
       source: "codexAppServer",
       windows: [
-        { label: "Weekly", usedPercent: 61, windowDurationMins: 10080, resetsAt: RESETS_AT_ISO },
+        {
+          key: "duration:10080",
+          label: "Weekly",
+          usedPercent: 61,
+          windowDurationMins: 10080,
+          resetsAt: RESETS_AT_ISO,
+        },
       ],
     });
   });

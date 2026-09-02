@@ -564,6 +564,36 @@ describe("server config forward compatibility", () => {
     ]);
   });
 
+  it("keeps provider-owned usage window keys when present", () => {
+    const parsed = decodeServerProviders([
+      {
+        ...baseProviderSnapshot,
+        usageLimits: {
+          source: "claudeStatusProbe",
+          available: true,
+          checkedAt: "2026-04-10T00:00:00.000Z",
+          windows: [
+            {
+              key: "weekly_scoped:Fable",
+              kind: "weekly",
+              label: "Fable",
+              usedPercent: 95,
+            },
+          ],
+        },
+      },
+    ]);
+
+    expect(parsed[0]?.usageLimits?.windows).toEqual([
+      {
+        key: "weekly_scoped:Fable",
+        kind: "weekly",
+        label: "Fable",
+        usedPercent: 95,
+      },
+    ]);
+  });
+
   it("drops providers this build cannot decode instead of failing the whole array", () => {
     const decodedBase = decodeServerProvider(baseProviderSnapshot);
 

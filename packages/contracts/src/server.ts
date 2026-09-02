@@ -115,6 +115,12 @@ const ServerProviderUsagePercent = Schema.Number.check(Schema.isGreaterThanOrEqu
 );
 
 export const ServerProviderUsageWindow = Schema.Struct({
+  /**
+   * Provider-owned identity for this bar. Merge and React keys use this so two
+   * weekly windows (all-models vs Fable) can coexist. Older payloads omit it;
+   * clients fall back to kind + label + duration.
+   */
+  key: Schema.optional(TrimmedNonEmptyString),
   kind: Schema.Literals(["session", "weekly", "monthly"]),
   label: TrimmedNonEmptyString,
   usedPercent: ServerProviderUsagePercent,

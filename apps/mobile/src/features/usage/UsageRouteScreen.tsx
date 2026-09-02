@@ -617,7 +617,10 @@ function ProviderQuotaSection() {
                       : formatQuotaResetDate(window.resetsAt, { dateOnly: dateOnlyReset });
                     return (
                       <View
-                        key={`${window.kind}:${window.label}:${window.resetsAt ?? "none"}`}
+                        key={
+                          window.key?.trim() ||
+                          `${window.kind}:${window.label}:${window.resetsAt ?? "none"}`
+                        }
                         className="gap-1.5"
                       >
                         <View className="flex-row items-baseline justify-between gap-3">

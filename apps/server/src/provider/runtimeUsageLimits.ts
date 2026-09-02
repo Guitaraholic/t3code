@@ -40,19 +40,23 @@ function claudeScopedWeeklyLabel(type: string, info: Readonly<Record<string, unk
 function claudeWindowFromRateLimitType(
   type: string,
   info: Readonly<Record<string, unknown>>,
-): { readonly label: string; readonly windowDurationMins: number } | undefined {
+):
+  | { readonly key: string; readonly label: string; readonly windowDurationMins: number }
+  | undefined {
   if (type === "five_hour") {
-    return CLAUDE_SESSION_WINDOW;
+    return { key: type, ...CLAUDE_SESSION_WINDOW };
   }
   if (type === "seven_day") {
-    return CLAUDE_WEEKLY_WINDOW;
+    return { key: type, ...CLAUDE_WEEKLY_WINDOW };
   }
   if (type === "overage") {
     return undefined;
   }
   if (type === "weekly_scoped" || type.startsWith("seven_day_")) {
+    const label = claudeScopedWeeklyLabel(type, info);
     return {
-      label: claudeScopedWeeklyLabel(type, info),
+      key: type === "weekly_scoped" ? `weekly_scoped:${label}` : type,
+      label,
       windowDurationMins: CLAUDE_WEEKLY_WINDOW.windowDurationMins,
     };
   }
@@ -111,6 +115,12 @@ function readClaudeResetsAt(info: Readonly<Record<string, unknown>>): string | u
  * (`0.85` = 85%). Values already above 1 are treated as percents so a
  * percent-scaled payload still maps onto the bar. `usedPercent`, when present,
  * is already 0–100 and is not scaled again.
+ *
+ * The `<= 1` check is a magnitude heuristic, not a typed unit. A genuine
+ * sub-1 percent (`0.4`) would render as 40%, and `1` is ambiguous (100% on
+ * the fraction scale, 1% on the percent scale). The OAuth usage endpoint
+ * reports 0–100 and is not ingested here — if it is later, do not reuse this
+ * helper.
  */
 function claudeUtilizationToUsedPercent(value: number): number {
   return value <= 1 ? value * 100 : value;
@@ -146,6 +156,7 @@ export function parseClaudeRuntimeUsageWindows(
   const resetsAt = readClaudeResetsAt(info);
   return [
     {
+      key: window.key,
       label: window.label,
       usedPercent,
       windowDurationMins: window.windowDurationMins,
@@ -178,6 +189,7 @@ export function parseCodexRuntimeUsageWindows(
   }
 
   return resolved.windows.map((window) => ({
+    ...(window.key ? { key: window.key } : {}),
     label: window.label,
     usedPercent: window.usedPercent,
     ...(window.resetsAt !== undefined ? { resetsAt: window.resetsAt } : {}),

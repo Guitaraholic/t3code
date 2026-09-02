@@ -32,6 +32,7 @@ function readIsoDateTime(value: unknown): string | undefined {
 function toUsageWindow(
   usage: Record<string, unknown>,
   label: string,
+  key: string,
 ): ServerProviderUsageWindow | undefined {
   const resetsAt =
     readIsoDateTime(usage.resetsAt) ??
@@ -62,6 +63,7 @@ function toUsageWindow(
   }
 
   return {
+    key,
     kind: "session",
     label,
     usedPercent: clampPercent(computedPercent),
@@ -97,7 +99,7 @@ function extractUsageWindow(
     if (!isRecord(candidate)) {
       continue;
     }
-    const window = toUsageWindow(candidate, descriptor.label);
+    const window = toUsageWindow(candidate, descriptor.label, `opencode:${provider.id}`);
     if (window) {
       return window;
     }
