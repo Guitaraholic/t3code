@@ -126,6 +126,23 @@ describe("applyRuntimeUsageLimits", () => {
     ],
   };
 
+  it("keeps two weekly windows with different labels instead of collapsing them", () => {
+    const next = applyRuntimeUsageLimits({
+      previous,
+      source: "claudeStatusProbe",
+      checkedAt: "2026-08-09T11:00:00.000Z",
+      windows: [{ label: "Fable", usedPercent: 95, windowDurationMins: 10_080 }],
+    });
+
+    expect(next?.windows.map((window) => window.label)).toEqual(["Session", "Weekly", "Fable"]);
+    expect(next?.windows.find((window) => window.label === "Fable")).toEqual({
+      kind: "weekly",
+      label: "Fable",
+      usedPercent: 95,
+      windowDurationMins: 10_080,
+    });
+  });
+
   it("upserts by kind and leaves the untouched window alone", () => {
     const next = applyRuntimeUsageLimits({
       previous,

@@ -50,6 +50,30 @@ describe("parseRuntimeUsageLimitsUpdate", () => {
     ).toEqual(claudeFiveHourWindows);
   });
 
+  it("maps a Claude model-scoped weekly onto its own labeled window", () => {
+    const update = parseRuntimeUsageLimitsUpdate({
+      driverKind: claudeDriver,
+      checkedAt: CHECKED_AT,
+      rateLimits: {
+        rate_limit_info: {
+          rateLimitType: "weekly_scoped",
+          utilization: 0.95,
+          resetsAt: RESETS_AT_SECONDS,
+          scope: { model: { display_name: "Fable" } },
+        },
+      },
+    });
+
+    expect(update?.windows).toEqual([
+      {
+        label: "Fable",
+        usedPercent: 95,
+        windowDurationMins: 10080,
+        resetsAt: RESETS_AT_ISO,
+      },
+    ]);
+  });
+
   it("maps a Claude seven-day rate limit event onto the weekly window", () => {
     const update = parseRuntimeUsageLimitsUpdate({
       driverKind: claudeDriver,
@@ -139,16 +163,28 @@ describe("parseRuntimeUsageLimitsUpdate", () => {
     ).toBe(42);
   });
 
-  it("ignores Claude sub-limits that have no bar of their own", () => {
-    for (const rateLimitType of ["seven_day_opus", "seven_day_sonnet", "overage"]) {
-      expect(
-        parseRuntimeUsageLimitsUpdate({
-          driverKind: claudeDriver,
-          checkedAt: CHECKED_AT,
-          rateLimits: { rate_limit_info: { rateLimitType, utilization: 10 } },
-        }),
-      ).toBeUndefined();
-    }
+  it("maps Claude model-family weeklies onto their own bars and ignores overage", () => {
+    expect(
+      parseRuntimeUsageLimitsUpdate({
+        driverKind: claudeDriver,
+        checkedAt: CHECKED_AT,
+        rateLimits: { rate_limit_info: { rateLimitType: "seven_day_opus", utilization: 0.1 } },
+      })?.windows,
+    ).toEqual([{ label: "Opus", usedPercent: 10, windowDurationMins: 10080 }]);
+    expect(
+      parseRuntimeUsageLimitsUpdate({
+        driverKind: claudeDriver,
+        checkedAt: CHECKED_AT,
+        rateLimits: { rate_limit_info: { rateLimitType: "seven_day_sonnet", utilization: 0.1 } },
+      })?.windows,
+    ).toEqual([{ label: "Sonnet", usedPercent: 10, windowDurationMins: 10080 }]);
+    expect(
+      parseRuntimeUsageLimitsUpdate({
+        driverKind: claudeDriver,
+        checkedAt: CHECKED_AT,
+        rateLimits: { rate_limit_info: { rateLimitType: "overage", utilization: 0.1 } },
+      }),
+    ).toBeUndefined();
   });
 
   it("returns undefined when a Claude event carries no utilization", () => {

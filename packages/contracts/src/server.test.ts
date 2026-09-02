@@ -552,7 +552,7 @@ describe("server config forward compatibility", () => {
           checkedAt: "2026-04-10T00:00:00.000Z",
           windows: [
             { kind: "session", label: "Session", usedPercent: 10 },
-            { kind: "monthly", label: "Monthly", usedPercent: 20 },
+            { kind: "yearly", label: "Yearly", usedPercent: 20 },
           ],
         },
       },

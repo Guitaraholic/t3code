@@ -23,7 +23,7 @@ export function windowKindFromDuration(input: {
   if (typeof duration !== "number" || !Number.isFinite(duration)) {
     return undefined;
   }
-  if (duration > 30 * 24 * 60) {
+  if (duration >= 30 * 24 * 60) {
     return "monthly";
   }
   if (
@@ -111,14 +111,18 @@ export function makeUnavailableUsageLimits(input: {
  * `windowDurationMins` when the update omits them. Otherwise a percent-only
  * event would drop the reset timestamp a probe had already resolved.
  */
+function usageWindowMergeKey(window: ServerProviderUsageWindow): string {
+  return `${window.kind}:${window.label}:${window.windowDurationMins ?? ""}`;
+}
+
 export function mergeUsageLimitWindows(
   previous: ReadonlyArray<ServerProviderUsageWindow>,
   incoming: ReadonlyArray<ServerProviderUsageWindow>,
 ): ReadonlyArray<ServerProviderUsageWindow> {
-  const merged = new Map(previous.map((window) => [window.kind, window] as const));
+  const merged = new Map(previous.map((window) => [usageWindowMergeKey(window), window] as const));
   for (const window of incoming) {
-    const existing = merged.get(window.kind);
-    merged.set(window.kind, {
+    const existing = merged.get(usageWindowMergeKey(window));
+    merged.set(usageWindowMergeKey(window), {
       ...window,
       ...(window.resetsAt === undefined && existing?.resetsAt !== undefined
         ? { resetsAt: existing.resetsAt }

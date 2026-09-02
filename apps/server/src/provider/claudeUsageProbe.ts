@@ -91,7 +91,7 @@ function detectClaudeUsageWindowKind(value: string): "session" | "weekly" | unde
 }
 
 /** Matches a parenthesized IANA zone id, e.g. "(Asia/Kolkata)" or "(America/Los_Angeles)". */
-const IANA_TIMEZONE_PATTERN = /\(([^()\s]+\/[^()\s]+)\)\s*$/;
+const IANA_TIMEZONE_PATTERN = /\(([^()\s]+\/[^()\s]+)\)/;
 const MONTH_ABBREVIATIONS = [
   "jan",
   "feb",
@@ -195,7 +195,7 @@ function extractResetTimestamp(value: string, checkedAt: string): string | undef
     return parseCanonicalReset(
       candidate.slice(0, ianaZoneMatch.index).trim(),
       checkedAt,
-      ianaZoneId,
+      ianaZoneId === "Asia/Calcutta" ? "Asia/Kolkata" : ianaZoneId,
     );
   }
 
@@ -212,6 +212,11 @@ function extractResetTimestamp(value: string, checkedAt: string): string | undef
   // parenthesized IANA zone. That wall clock is local to the machine running
   // the probe.
   return parseCanonicalReset(candidate, checkedAt, hostTimeZoneId());
+}
+
+function weeklyLabelFromSegment(segment: string): string {
+  const scoped = segment.match(/\bweek(?:ly)?\s*\(([^)]+)\)/i)?.[1]?.trim();
+  return scoped && scoped.length > 0 ? scoped : "Weekly";
 }
 
 function parseClaudeUsageWindowSegment(
@@ -233,7 +238,7 @@ function parseClaudeUsageWindowSegment(
   const resetsAt = extractResetTimestamp(segment, checkedAt);
 
   return {
-    label: kind === "session" ? "Session" : "Weekly",
+    label: kind === "session" ? "Session" : weeklyLabelFromSegment(segment),
     usedPercent,
     windowDurationMins,
     ...(resetsAt ? { resetsAt } : {}),
@@ -253,12 +258,14 @@ function extractWindowSegments(
     .split(/\r?\n/g)
     .map((line) => line.trim())
     .filter(Boolean);
-  const windows = new Map<"session" | "weekly", (typeof lines)[number]>();
+  const windows = new Map<string, { kind: "session" | "weekly"; segment: string }>();
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]!;
     const kind = detectClaudeUsageWindowKind(line);
-    if (!kind || windows.has(kind)) continue;
+    if (!kind) continue;
+    const mapKey = `${kind}:${kind === "weekly" ? weeklyLabelFromSegment(line) : "Session"}`;
+    if (windows.has(mapKey)) continue;
 
     const segmentLines = [line];
     for (let cursor = index + 1; cursor < lines.length && segmentLines.length < 3; cursor += 1) {
@@ -269,10 +276,10 @@ function extractWindowSegments(
       segmentLines.push(candidate);
     }
     const neighborhood = segmentLines.join(" ");
-    windows.set(kind, neighborhood);
+    windows.set(mapKey, { kind, segment: neighborhood });
   }
 
-  return [...windows.entries()].flatMap(([kind, segment]) => {
+  return [...windows.values()].flatMap(({ kind, segment }) => {
     const parsed = parseClaudeUsageWindowSegment(kind, segment, checkedAt);
     if (!parsed) {
       return [];

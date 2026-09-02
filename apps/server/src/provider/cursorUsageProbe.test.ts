@@ -139,14 +139,14 @@ describe("cursorUsageProbe", () => {
     expect(parsed.source).toBe("cursorStatusProbe");
     expect(parsed.windows).toEqual([
       {
-        kind: "weekly",
+        kind: "monthly",
         label: "Auto",
         usedPercent: 10,
         windowDurationMins: 30 * 24 * 60,
         resetsAt: "2026-08-07T00:00:00.000Z",
       },
       {
-        kind: "weekly",
+        kind: "monthly",
         label: "API",
         usedPercent: 13,
         windowDurationMins: 30 * 24 * 60,
@@ -171,14 +171,14 @@ describe("cursorUsageProbe", () => {
 
     expect(parsed.windows).toEqual([
       {
-        kind: "weekly",
+        kind: "monthly",
         label: "Auto",
         usedPercent: 2,
         windowDurationMins: 30 * 24 * 60,
         resetsAt: "2026-09-16T00:00:00.000Z",
       },
       {
-        kind: "weekly",
+        kind: "monthly",
         label: "API",
         usedPercent: 0,
         windowDurationMins: 30 * 24 * 60,

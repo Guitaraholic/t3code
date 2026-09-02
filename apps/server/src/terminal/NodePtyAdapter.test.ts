@@ -20,7 +20,7 @@ const spawn = vi.fn(() => ({
 }));
 
 const { taskkillSpawn } = vi.hoisted(() => ({
-  taskkillSpawn: vi.fn(() => ({ unref: vi.fn() })),
+  taskkillSpawn: vi.fn(() => ({ unref: vi.fn(), once: vi.fn() })),
 }));
 
 vi.mock("node-pty", () => ({ spawn }));

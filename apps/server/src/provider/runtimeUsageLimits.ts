@@ -20,17 +20,44 @@ import {
 } from "./codexUsageProbe.ts";
 import type { RawUsageWindowInput } from "./providerUsageLimits.ts";
 
-/**
- * Claude reports each limit window separately. Only the two windows the Usage
- * page renders are mapped: the `*_opus` / `*_sonnet` weekly sub-limits and
- * `overage` would all collapse onto the same "weekly" slot and fight over it.
- */
-const CLAUDE_WINDOW_BY_RATE_LIMIT_TYPE: Readonly<
-  Record<string, { readonly label: string; readonly windowDurationMins: number }>
-> = {
-  five_hour: { label: "Session", windowDurationMins: 5 * 60 },
-  seven_day: { label: "Weekly", windowDurationMins: 7 * 24 * 60 },
-};
+const CLAUDE_SESSION_WINDOW = { label: "Session", windowDurationMins: 5 * 60 } as const;
+const CLAUDE_WEEKLY_WINDOW = { label: "Weekly", windowDurationMins: 7 * 24 * 60 } as const;
+
+function claudeScopedWeeklyLabel(type: string, info: Readonly<Record<string, unknown>>): string {
+  const scope = readRecord(info.scope);
+  const model = readRecord(scope?.model);
+  const displayName = typeof model?.display_name === "string" ? model.display_name.trim() : "";
+  if (displayName.length > 0) {
+    return displayName;
+  }
+  const suffix = type
+    .replace(/^seven_day_/, "")
+    .replace(/_/g, " ")
+    .trim();
+  return suffix.length > 0 ? suffix.replace(/\b\w/g, (char) => char.toUpperCase()) : "Weekly";
+}
+
+function claudeWindowFromRateLimitType(
+  type: string,
+  info: Readonly<Record<string, unknown>>,
+): { readonly label: string; readonly windowDurationMins: number } | undefined {
+  if (type === "five_hour") {
+    return CLAUDE_SESSION_WINDOW;
+  }
+  if (type === "seven_day") {
+    return CLAUDE_WEEKLY_WINDOW;
+  }
+  if (type === "overage") {
+    return undefined;
+  }
+  if (type === "weekly_scoped" || type.startsWith("seven_day_")) {
+    return {
+      label: claudeScopedWeeklyLabel(type, info),
+      windowDurationMins: CLAUDE_WEEKLY_WINDOW.windowDurationMins,
+    };
+  }
+  return undefined;
+}
 
 export interface RuntimeUsageLimitsUpdate {
   readonly source: ServerProviderUsageLimits["source"];
@@ -103,7 +130,7 @@ export function parseClaudeRuntimeUsageWindows(
     return [];
   }
   const rateLimitType = readClaudeRateLimitType(info);
-  const window = rateLimitType ? CLAUDE_WINDOW_BY_RATE_LIMIT_TYPE[rateLimitType] : undefined;
+  const window = rateLimitType ? claudeWindowFromRateLimitType(rateLimitType, info) : undefined;
   const usedPercentRaw = readFiniteNumber(info.usedPercent);
   const utilization = readFiniteNumber(info.utilization);
   const usedPercent =
