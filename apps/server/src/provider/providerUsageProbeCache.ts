@@ -13,13 +13,6 @@ import { isAuthoritativeUsageUnavailable } from "./providerUsageLimits.ts";
 export const USAGE_PROBE_SUCCESS_TTL_MS = 180_000;
 export const USAGE_PROBE_FAILURE_TTL_MS = 10 * 60_000;
 
-export interface UsageProbeCacheIdentity {
-  readonly driver: string;
-  readonly binaryPath: string;
-  readonly homeIdentity: string;
-  readonly launchArgs?: string;
-}
-
 type UsageProbeCacheOutcome =
   | { readonly _tag: "Success"; readonly limits: ServerProviderUsageLimits }
   | { readonly _tag: "Failure" };
@@ -29,21 +22,12 @@ interface UsageProbeCacheEntry {
   readonly outcome: UsageProbeCacheOutcome;
 }
 
-export interface UsageProbeCacheRead {
+interface UsageProbeCacheRead {
   readonly limits: ServerProviderUsageLimits | undefined;
   readonly skipProbe: boolean;
 }
 
 const cache = new Map<string, UsageProbeCacheEntry>();
-
-export function makeUsageProbeCacheKey(identity: UsageProbeCacheIdentity): string {
-  return JSON.stringify([
-    identity.driver,
-    identity.binaryPath,
-    identity.homeIdentity,
-    identity.launchArgs ?? null,
-  ]);
-}
 
 export function makeProviderUsageProbeCacheKey(input: {
   readonly driver: string;
@@ -54,12 +38,12 @@ export function makeProviderUsageProbeCacheKey(input: {
 }): string {
   const homePath = input.homePath?.trim() ?? "";
   const fallback = input.fallbackIdentity?.trim() ?? "";
-  return makeUsageProbeCacheKey({
-    driver: input.driver,
-    binaryPath: input.binaryPath,
-    homeIdentity: homePath.length > 0 ? homePath : fallback.length > 0 ? fallback : "default",
-    ...(input.launchArgs ? { launchArgs: input.launchArgs } : {}),
-  });
+  return JSON.stringify([
+    input.driver,
+    input.binaryPath,
+    homePath.length > 0 ? homePath : fallback.length > 0 ? fallback : "default",
+    input.launchArgs ?? null,
+  ]);
 }
 
 export function resetUsageProbeCacheForTests(): void {

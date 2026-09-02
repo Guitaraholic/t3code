@@ -7,7 +7,6 @@ import {
   USAGE_PROBE_SUCCESS_TTL_MS,
   cachedUsageProbe,
   makeProviderUsageProbeCacheKey,
-  makeUsageProbeCacheKey,
   readCachedUsageProbe,
   rememberUsageProbeResult,
   resetUsageProbeCacheForTests,
@@ -66,10 +65,10 @@ describe("usage probe cache", () => {
 
   it("reuses a successful snapshot for 180 seconds", () => {
     resetUsageProbeCacheForTests();
-    const cacheKey = makeUsageProbeCacheKey({
+    const cacheKey = makeProviderUsageProbeCacheKey({
       driver: "claude",
       binaryPath: "claude",
-      homeIdentity: "success-ttl",
+      homePath: "success-ttl",
     });
     rememberUsageProbeResult(cacheKey, SUCCESS, 1_000);
     expect(readCachedUsageProbe(cacheKey, 1_000 + USAGE_PROBE_SUCCESS_TTL_MS - 1)).toEqual({
@@ -81,10 +80,10 @@ describe("usage probe cache", () => {
 
   it("backs off a failed probe for 10 minutes without reverting live bars", () => {
     resetUsageProbeCacheForTests();
-    const cacheKey = makeUsageProbeCacheKey({
+    const cacheKey = makeProviderUsageProbeCacheKey({
       driver: "claude",
       binaryPath: "claude",
-      homeIdentity: "failure-ttl",
+      homePath: "failure-ttl",
     });
     rememberUsageProbeResult(cacheKey, FAILURE, 1_000);
     expect(readCachedUsageProbe(cacheKey, 1_000 + USAGE_PROBE_FAILURE_TTL_MS - 1)).toEqual({
@@ -96,10 +95,10 @@ describe("usage probe cache", () => {
 
   it("treats API-key unavailability as a settled success", () => {
     resetUsageProbeCacheForTests();
-    const cacheKey = makeUsageProbeCacheKey({
+    const cacheKey = makeProviderUsageProbeCacheKey({
       driver: "claude",
       binaryPath: "claude",
-      homeIdentity: "api-key",
+      homePath: "api-key",
     });
     rememberUsageProbeResult(cacheKey, API_KEY, 1_000);
     expect(readCachedUsageProbe(cacheKey, 1_000 + 1)?.limits).toEqual(API_KEY);
@@ -112,10 +111,10 @@ describe("usage probe cache", () => {
 describe("cachedUsageProbe", () => {
   it("does not spawn again while the success TTL holds", async () => {
     resetUsageProbeCacheForTests();
-    const cacheKey = makeUsageProbeCacheKey({
+    const cacheKey = makeProviderUsageProbeCacheKey({
       driver: "claude",
       binaryPath: "claude",
-      homeIdentity: "cache-test",
+      homePath: "cache-test",
     });
     let probes = 0;
     const probe = Effect.sync(() => {
@@ -130,10 +129,10 @@ describe("cachedUsageProbe", () => {
 
   it("does not spawn again during the failure backoff", async () => {
     resetUsageProbeCacheForTests();
-    const cacheKey = makeUsageProbeCacheKey({
+    const cacheKey = makeProviderUsageProbeCacheKey({
       driver: "claude",
       binaryPath: "claude",
-      homeIdentity: "failure-test",
+      homePath: "failure-test",
     });
     let probes = 0;
     const probe = Effect.sync(() => {
@@ -148,15 +147,15 @@ describe("cachedUsageProbe", () => {
 
   it("does not share snapshots across homes", () => {
     resetUsageProbeCacheForTests();
-    const first = makeUsageProbeCacheKey({
+    const first = makeProviderUsageProbeCacheKey({
       driver: "codex",
       binaryPath: "codex",
-      homeIdentity: "home-a",
+      homePath: "home-a",
     });
-    const second = makeUsageProbeCacheKey({
+    const second = makeProviderUsageProbeCacheKey({
       driver: "codex",
       binaryPath: "codex",
-      homeIdentity: "home-b",
+      homePath: "home-b",
     });
     rememberUsageProbeResult(first, SUCCESS, 5_000);
     expect(readCachedUsageProbe(second, 5_000)).toBeUndefined();
