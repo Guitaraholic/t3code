@@ -16,11 +16,11 @@ const spawn = vi.fn(() => ({
   resize: vi.fn(),
   kill: vi.fn(),
   onData: vi.fn(() => ({ dispose: vi.fn() })),
-  onExit: vi.fn(() => ({ dispose: vi.fn() })),
+  onExit: vi.fn((..._args: unknown[]) => ({ dispose: vi.fn() })),
 }));
 
 const { taskkillSpawn } = vi.hoisted(() => ({
-  taskkillSpawn: vi.fn(() => ({ unref: vi.fn(), once: vi.fn() })),
+  taskkillSpawn: vi.fn((..._args: unknown[]) => ({ unref: vi.fn(), once: vi.fn() })),
 }));
 
 vi.mock("node-pty", () => ({ spawn }));
@@ -31,7 +31,7 @@ vi.mock("node:child_process", async (importOriginal) => {
     ...actual,
     spawn: (...args: Parameters<typeof actual.spawn>) => {
       if (args[0] === "taskkill") {
-        return taskkillSpawn(...args) as ReturnType<typeof actual.spawn>;
+        return taskkillSpawn(...args) as unknown as ReturnType<typeof actual.spawn>;
       }
       return actual.spawn(...args);
     },
@@ -58,7 +58,7 @@ const windowsSpawnInput = {
   cols: 120,
   rows: 40,
   env: {},
-} as const;
+};
 
 it.effect("spawns through the public adapter with the provided host references", () =>
   Effect.gen(function* () {
@@ -154,8 +154,8 @@ it.effect("replays a prior exit after the current setup stack completes", () =>
       resize: vi.fn(),
       kill: vi.fn(),
       onData: vi.fn(() => ({ dispose: vi.fn() })),
-      onExit: vi.fn((callback: (event: { exitCode: number; signal?: number }) => void) => {
-        nativeOnExit = callback;
+      onExit: vi.fn((...args: unknown[]) => {
+        nativeOnExit = args[0] as typeof nativeOnExit;
         return { dispose: vi.fn() };
       }),
     }));
@@ -185,8 +185,8 @@ it.effect("does not replay a prior exit after the listener unsubscribes", () =>
       resize: vi.fn(),
       kill: vi.fn(),
       onData: vi.fn(() => ({ dispose: vi.fn() })),
-      onExit: vi.fn((callback: (event: { exitCode: number; signal?: number }) => void) => {
-        nativeOnExit = callback;
+      onExit: vi.fn((...args: unknown[]) => {
+        nativeOnExit = args[0] as typeof nativeOnExit;
         return { dispose: vi.fn() };
       }),
     }));

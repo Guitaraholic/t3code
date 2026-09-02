@@ -1,3 +1,5 @@
+// @effect-diagnostics nodeBuiltinImport:off - Windows PTY teardown must
+// taskkill the process tree; node-pty's own kill throws asynchronously.
 import { spawn as spawnOsProcess } from "node:child_process";
 import * as NodeModule from "node:module";
 

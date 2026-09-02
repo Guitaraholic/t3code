@@ -64,7 +64,7 @@ import { OpenCodeRuntimeLive } from "../opencodeRuntime.ts";
 import { NoOpProviderEventLoggers, ProviderEventLoggers } from "./ProviderEventLoggers.ts";
 import {
   makeProviderInstanceRegistry,
-  ProviderInstanceRegistryLayer,
+  ProviderInstanceRegistryMutableLayer,
 } from "./ProviderInstanceRegistryLive.ts";
 
 const TestHttpClientLive = Layer.succeed(
@@ -546,7 +546,7 @@ describe("ProviderInstanceRegistryLive — PtyAdapter context propagation", () =
       // layer, with the adapter absent from the driver's declared env.
       const registryLayer = Layer.unwrap(
         Effect.succeed(
-          ProviderInstanceRegistryLayer({
+          ProviderInstanceRegistryMutableLayer({
             drivers: [makeProbeDriver(sawAdapter)],
             configMap: {
               [probeInstanceId]: {
@@ -571,7 +571,7 @@ describe("ProviderInstanceRegistryLive — PtyAdapter context propagation", () =
 
       const registryLayer = Layer.unwrap(
         Effect.succeed(
-          ProviderInstanceRegistryLayer({
+          ProviderInstanceRegistryMutableLayer({
             drivers: [makeProbeDriver(sawAdapter)],
             configMap: {
               [probeInstanceId]: {
