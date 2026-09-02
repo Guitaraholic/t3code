@@ -271,10 +271,13 @@ export function resolveUsageLimitsAfterRefresh(input: {
   readonly livePatchedWindows: ReadonlyArray<ServerProviderUsageWindow>;
 }): ServerProviderUsageLimits | undefined {
   const { published, probed, livePatchedWindows } = input;
+  if (probed === undefined) {
+    return published;
+  }
   if (isAuthoritativeUsageUnavailable(probed)) {
     return probed;
   }
-  if (published?.available === true && probed?.available !== true) {
+  if (published?.available === true && probed.available !== true) {
     return published;
   }
   if (

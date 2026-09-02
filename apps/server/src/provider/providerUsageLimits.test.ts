@@ -325,6 +325,30 @@ describe("resolveUsageLimitsAfterRefresh", () => {
     ).toBe(bedrockUnavailable);
   });
 
+  it("keeps published limits when a refresh skips the probe", () => {
+    const grokUnavailable: ServerProviderUsageLimits = {
+      source: "grokStatusProbe",
+      available: false,
+      reason: "Could not read usage limits for this Grok account.",
+      checkedAt: "2026-08-09T10:00:00.000Z",
+      windows: [],
+    };
+    expect(
+      resolveUsageLimitsAfterRefresh({
+        published: grokUnavailable,
+        probed: undefined,
+        livePatchedWindows: [],
+      }),
+    ).toBe(grokUnavailable);
+    expect(
+      resolveUsageLimitsAfterRefresh({
+        published,
+        probed: undefined,
+        livePatchedWindows: [],
+      }),
+    ).toBe(published);
+  });
+
   it("keeps published bars when an unavailable refresh follows a settings change", () => {
     const probedUnavailable: ServerProviderUsageLimits = {
       source: "claudeStatusProbe",
