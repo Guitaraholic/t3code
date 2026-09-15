@@ -9,12 +9,14 @@ import {
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
 
 import { codexPlanLabel } from "../provider/Layers/CodexProvider.ts";
 import { codexRateLimitsToLimits } from "../provider/Layers/codexUsageLimits.ts";
 import { claudeUsageResponseToLimits } from "../provider/Layers/claudeUsageLimits.ts";
+import { devinQuotaToUsageLimits } from "../provider/Layers/devinUsageLimits.ts";
 import { makeUnavailableUsageLimits } from "../provider/providerUsageLimits.ts";
 
 const AuthFile = Schema.Struct({
@@ -31,6 +33,23 @@ const AuthFile = Schema.Struct({
   ),
 });
 const AuthFiles = Schema.Struct({ files: Schema.Array(AuthFile) });
+/**
+ * Devin quota as the hub's Devin shim reports it. Percentages are already
+ * "used", matching {@link ServerProviderUsageWindow}; the CLI itself reports
+ * "remaining" and the shim flips it.
+ */
+const DevinQuotaWindow = Schema.Struct({
+  percent: Schema.Number,
+  resets_at: Schema.optional(Schema.NullOr(Schema.String)),
+  period_hours: Schema.optional(Schema.Number),
+});
+const DevinQuota = Schema.Struct({
+  plan: Schema.optional(Schema.NullOr(Schema.String)),
+  usage: Schema.Struct({
+    daily: Schema.optional(DevinQuotaWindow),
+    weekly: Schema.optional(DevinQuotaWindow),
+  }),
+});
 const ApiResponse = Schema.Struct({ status_code: Schema.Number, body: Schema.String });
 const CodexWindow = Schema.Struct({
   used_percent: Schema.Number,
@@ -82,6 +101,7 @@ const CreditList = Schema.Struct({
 });
 
 const decodeAuthFiles = Schema.decodeUnknownEffect(AuthFiles);
+const decodeDevinQuota = Schema.decodeUnknownEffect(DevinQuota);
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeApiResponse = Schema.decodeUnknownEffect(ApiResponse);
 const decodeCreditList = Schema.decodeUnknownEffect(Schema.fromJsonString(CreditList));
@@ -292,6 +312,46 @@ export const makeCliproxyApi = Effect.gen(function* () {
     );
   });
 
+  /**
+   * Devin quota from a hub that also fronts a Devin CLI shim.
+   *
+   * Devin has no HTTP API of its own, so the hub exposes its daily/weekly plan
+   * quota on a read-only `/devin/quota` route beside the management API. A hub
+   * without that route simply reports no Devin account — the whole source must
+   * not fail because one optional extra is absent.
+   */
+  const readDevinAccount = Effect.fn("CliproxyApi.readDevinAccount")(function* (
+    config: UsageLimitSourceConfig,
+  ) {
+    const checkedAt = DateTime.formatIso(yield* DateTime.now);
+    const url = yield* Effect.try({
+      try: () => new URL("/devin/quota", config.url).toString(),
+      catch: () => new UsageLimitSourceError({ detail: "The hub URL is not valid." }),
+    });
+    const body = yield* client.execute(HttpClientRequest.get(url)).pipe(
+      Effect.flatMap(HttpClientResponse.filterStatusOk),
+      Effect.flatMap((response) => response.json),
+      Effect.timeout("15 seconds"),
+      Effect.mapError(() => new UsageLimitSourceError({ detail: "No Devin quota on this hub." })),
+    );
+    const quota = yield* decodeDevinQuota(body).pipe(
+      Effect.mapError(
+        () => new UsageLimitSourceError({ detail: "The hub returned unreadable Devin quota." }),
+      ),
+    );
+
+    const usageLimits = devinQuotaToUsageLimits({ checkedAt, quota });
+    if (!usageLimits) {
+      return yield* new UsageLimitSourceError({ detail: "The hub reported no Devin windows." });
+    }
+    return {
+      id: "devin",
+      driver: ProviderDriverKind.make("devin"),
+      ...(quota.plan ? { plan: quota.plan } : {}),
+      usageLimits,
+    } satisfies UsageLimitSourceAccount;
+  });
+
   const readAccounts = Effect.fn("CliproxyApi.readAccounts")(function* (
     config: UsageLimitSourceConfig,
   ): Effect.fn.Return<ReadonlyArray<UsageLimitSourceAccount>, UsageLimitSourceError> {
@@ -300,7 +360,7 @@ export const makeCliproxyApi = Effect.gen(function* () {
         () => new UsageLimitSourceError({ detail: "The hub could not list accounts." }),
       ),
     );
-    return yield* Effect.forEach(
+    const hubAccounts = yield* Effect.forEach(
       accounts.filter(
         (account) =>
           !account.disabled && (account.provider === "codex" || account.provider === "claude"),
@@ -308,6 +368,8 @@ export const makeCliproxyApi = Effect.gen(function* () {
       (account) => readAccount(config, account),
       { concurrency: 4 },
     );
+    const devin = yield* readDevinAccount(config).pipe(Effect.option);
+    return Option.isSome(devin) ? [...hubAccounts, devin.value] : hubAccounts;
   });
 
   const consume = Effect.fn("CliproxyApi.consume")(function* (
